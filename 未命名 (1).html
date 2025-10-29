@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学习清单 | 学生专属任务管理</title>
+  <!-- 外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  
+  <!-- Tailwind配置 -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#5b21b6', // 紫色主调（学术感+专注）
+            subject: {
+              math: '#0ea5e9',
+              chinese: '#ef4444',
+              english: '#8b5cf6',
+              physics: '#f59e0b',
+              chemistry: '#10b981',
+              biology: '#ec4899'
+            },
+            dark: {
+              800: '#1e1b4b', // 深色背景（适配夜间学习）
+              900: '#0f172a',
+              100: '#f8fafc',
+              300: '#cbd5e1',
+              400: '#94a3b8'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义工具类 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .task-enter {
+        animation: taskIn 0.3s ease-out forwards;
+      }
+      .review-badge {
+        animation: pulse 2s infinite;
+      }
+      .theme-transition {
+        transition: all 0.3s ease;
+      }
+    }
+    
+    @keyframes taskIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(91, 33, 182, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(91, 33, 182, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(91, 33, 182, 0); }
+    }
+  </style>
+</head>
+
+<body class="font-sans bg-gray-50 text-gray-800 min-h-screen dark:bg-dark-900 dark:text-dark-100 theme-transition">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white dark:bg-dark-800 shadow-sm sticky top-0 z-50 theme-transition">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i class="fa fa-graduation-cap text-primary text-2xl"></i>
+        <h1 class="text-xl font-bold text-primary">学习清单</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <!-- 夜间模式切换（学生夜间学习优化） -->
+        <button id="theme-toggle" class="relative w-10 h-6 rounded-full bg-gray-200 dark:bg-gray-700 transition-colors">
+          <span class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform dark:translate-x-4"></span>
+          <i class="fa fa-sun-o absolute left-2 top-1/2 -translate-y-1/2 text-yellow-500 text-xs opacity-100 dark:opacity-0"></i>
+          <i class="fa fa-moon-o absolute right-2 top-1/2 -translate-y-1/2 text-blue-300 text-xs opacity-0 dark:opacity-100"></i>
+        </button>
+        
+        <!-- 学情统计按钮 -->
+        <button id="stats-btn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <i class="fa fa-bar-chart text-gray-600 dark:text-dark-300"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="container mx-auto px-4 py-6 max-w-3xl">
+    <!-- 学习进度概览（学生专属） -->
+    <div id="study-stats" class="bg-white dark:bg-dark-800 rounded-xl shadow-md p-5 mb-6 theme-transition">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold flex items-center">
+          <i class="fa fa-line-chart text-primary mr-2"></i>学习进度
+        </h2>
+        <span class="text-sm text-gray-500 dark:text-dark-400" id="week-label">2023年第15周</span>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+          <p class="text-xs text-gray-500 dark:text-dark-400">学习任务</p>
+          <p class="text-xl font-bold text-primary" id="total-study-tasks">0</p>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+          <p class="text-xs text-gray-500 dark:text-dark-400">完成率</p>
+          <p class="text-xl font-bold text-green-500" id="study-completion">0%</p>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+          <p class="text-xs text-gray-500 dark:text-dark-400">复习次数</p>
+          <p class="text-xl font-bold text-blue-500" id="review-count">0</p>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+          <p class="text-xs text-gray-500 dark:text-dark-400">专注时长</p>
+          <p class="text-xl font-bold text-purple-500" id="focus-hours">0h</p>
+        </div>
+      </div>
+      
+      <!-- 学科分布图表 -->
+      <div class="h-24">
+        <canvas id="subject-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- 待复习提醒（艾宾浩斯曲线） -->
+    <div id="review-reminder" class="bg-white dark:bg-dark-800 rounded-xl shadow-md p-5 mb-6 theme-transition hidden">
+      <h2 class="text-lg font-semibold mb-3 flex items-center">
+        <i class="fa fa-refresh text-primary mr-2"></i>今日复习提醒
+        <span class="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full" id="review-today-count">0项</span>
+      </h2>
+      <div id="review-list" class="space-y-2">
+        <!-- 复习项将动态插入 -->
+      </div>
+    </div>
+
+    <!-- 添加学习任务区域 -->
+    <div class="bg-white dark:bg-dark-800 rounded-xl shadow-md p-5 mb-6 theme-transition">
+      <h2 class="text-lg font-semibold mb-4 flex items-center">
+        <i class="fa fa-plus-circle text-primary mr-2"></i>添加学习任务
+      </h2>
+      
+      <form id="task-form" class="space-y-4">
+        <div class="flex flex-col md:flex-row gap-3">
+          <input 
+            type="text" 
+            id="task-input" 
+            placeholder="例如：复习高数第三章..." 
+            class="flex-grow px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+            required
+          >
+          
+          <!-- 学科分类（学生核心需求） -->
+          <select id="task-subject" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+            <option value="math">数学</option>
+            <option value="chinese">语文</option>
+            <option value="english">英语</option>
+            <option value="physics">物理</option>
+            <option value="chemistry">化学</option>
+            <option value="biology">生物</option>
+          </select>
+        </div>
+        
+        <!-- 学习任务类型 -->
+        <div class="flex gap-3">
+          <label class="flex items-center flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <input type="radio" name="task-type" value="new" checked class="mr-2 text-primary">
+            <span>新内容学习</span>
+          </label>
+          <label class="flex items-center flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <input type="radio" name="task-type" value="review" class="mr-2 text-primary">
+            <span>复习巩固</span>
+          </label>
+        </div>
+        
+        <!-- 学习任务模板（学生专属） -->
+        <div>
+          <p class="text-sm text-gray-500 dark:text-dark-400 mb-2">快速选择模板：</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="template-btn px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" data-text="背诵英语单词50个" data-subject="english">
+              英语单词
+            </button>
+            <button type="button" class="template-btn px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" data-text="完成数学练习题10道" data-subject="math">
+              数学练习
+            </button>
+            <button type="button" class="template-btn px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" data-text="整理物理笔记第三章" data-subject="physics">
+              整理笔记
+            </button>
+            <button type="button" class="template-btn px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" data-text="复习上周历史知识点" data-subject="chinese">
+              知识点复习
+            </button>
+          </div>
+        </div>
+        
+        <div class="flex flex-col md:flex-row gap-3">
+          <input 
+            type="date" 
+            id="task-date" 
+            class="flex-grow px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+          >
+          
+          <!-- 预估学习时长 -->
+          <select id="task-duration" class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+            <option value="0.5">30分钟</option>
+            <option value="1" selected>1小时</option>
+            <option value="1.5">1.5小时</option>
+            <option value="2">2小时</option>
+            <option value="3">3小时以上</option>
+          </select>
+        </div>
+        
+        <!-- 艾宾浩斯复习提醒（核心功能） -->
+        <div class="flex items-center">
+          <input type="checkbox" id="enable-review" checked class="mr-2 h-4 w-4 text-primary focus:ring-primary rounded">
+          <label for="enable-review" class="text-sm">自动生成复习计划（按艾宾浩斯曲线）</label>
+        </div>
+        
+        <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg transition-colors flex items-center justify-center">
+          <i class="fa fa-plus mr-2"></i>添加学习任务
+        </button>
+      </form>
+    </div>
+
+    <!-- 任务筛选 -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button class="filter-btn active px-4 py-2 rounded-full bg-primary text-white text-sm" data-filter="all">
+        全部任务
+      </button>
+      <button class="filter-btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm transition-colors" data-filter="pending">
+        未完成
+      </button>
+      <button class="filter-btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm transition-colors" data-filter="completed">
+        已完成
+      </button>
+      <button class="filter-btn px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm transition-colors" data-filter="review">
+        复习任务
+      </button>
+    </div>
+
+    <!-- 任务列表区域 -->
+    <div class="bg-white dark:bg-dark-800 rounded-xl shadow-md p-5 mb-6 theme-transition">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold flex items-center">
+          <i class="fa fa-list-ul text-primary mr-2"></i>学习任务列表
+        </h2>
+        <button id="clear-completed" class="text-sm text-gray-500 dark:text-dark-400 hover:text-red-500 transition-colors">
+          清除已完成
+        </button>
+      </div>
+      
+      <div id="task-list" class="space-y-3">
+        <!-- 初始提示 -->
+        <div id="empty-state" class="py-10 text-center">
+          <i class="fa fa-book text-5xl text-gray-300 dark:text-gray-600 mb-3"></i>
+          <p class="text-gray-500 dark:text-dark-400">还没有学习任务，开始添加吧！</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 学情分析模态框 -->
+  <div id="stats-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-dark-800 rounded-xl shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 theme-transition">
+      <h3 class="text-xl font-semibold mb-4">学情分析报告</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+          <p class="text-sm text-gray-500 dark:text-dark-400">本周学习总时长</p>
+          <p class="text-2xl font-bold text-primary" id="weekly-study-hours">0小时</p>
+        </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+          <p class="text-sm text-gray-500 dark:text-dark-400">平均每日学习任务</p>
+          <p class="text-2xl font-bold text-primary" id="daily-average">0项</p>
+        </div>
+      </div>
+      
+      <div class="mb-6">
+        <h4 class="font-medium mb-3">学科学习分布</h4>
+        <div class="h-64">
+          <canvas id="subject-pie-chart"></canvas>
+        </div>
+      </div>
+      
+      <div class="mb-6">
+        <h4 class="font-medium mb-3">复习完成情况</h4>
+        <div class="h-64">
+          <canvas id="review-chart"></canvas>
+        </div>
+      </div>
+      
+      <div class="bg-primary/5 dark:bg-primary/10 p-4 rounded-lg">
+        <h4 class="font-medium mb-2 flex items-center">
+          <i class="fa fa-lightbulb-o text-primary mr-2"></i>学习建议
+        </h4>
+        <p class="text-sm text-gray-600 dark:text-dark-300" id="study-suggestion">
+          继续保持良好的学习习惯，建议增加英语学科的复习频率哦！
+        </p>
+      </div>
+      
+      <button id="close-stats" class="mt-6 w-full py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        关闭报告
+      </button>
+    </div>
+  </div>
+
+  <!-- 页脚 -->
+  <footer class="bg-white dark:bg-dark-800 border-t border-gray-200 dark:border-gray-700 py-4 theme-transition">
+    <div class="container mx-auto px-4 text-center text-sm text-gray-500 dark:text-dark-400">
+      <p>学习清单 © 2023 | 专为学生打造的学习任务管理工具</p>
+    </div>
+  </footer>
+
+  <script>
+    // 数据结构与存储
+    let tasks = [];
+    const TASKS_STORAGE_KEY = 'student_tasks';
+    const THEME_STORAGE_KEY = 'student_theme';
+    
+    // 艾宾浩斯复习时间点（单位：天）
+    const EBBINGHAUS_INTERVALS = [1, 3, 7, 14]; // 1天后、3天后、7天后、14天后
+    
+    // DOM元素
+    const taskForm = document.getElementById('task-form');
+    const taskInput = document.getElementById('task-input');
+    const taskSubject = document.getElementById('task-subject');
+    const taskDate = document.getElementById('task-date');
+    const taskDuration = document.getElementById('task-duration');
+    const enableReview = document.getElementById('enable-review');
+    const taskList = document.getElementById('task-list');
+    const emptyState = document.getElementById('empty-state');
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const clearCompletedBtn = document.getElementById('clear-completed');
+    const templateBtns = document.querySelectorAll('.template-btn');
+    const themeToggle = document.getElementById('theme-toggle');
+    const statsBtn = document.getElementById('stats-btn');
+    const statsModal = document.getElementById('stats-modal');
+    const closeStats = document.getElementById('close-stats');
+    
+    // 统计相关元素
+    const totalStudyTasksEl = document.getElementById('total-study-tasks');
+    const studyCompletionEl = document.getElementById('study-completion');
+    const reviewCountEl = document.getElementById('review-count');
+    const focusHoursEl = document.getElementById('focus-hours');
+    const reviewTodayCountEl = document.getElementById('review-today-count');
+    const reviewListEl = document.getElementById('review-list');
+    const reviewReminderEl = document.getElementById('review-reminder');
+    
+    // 图表实例
+    let subjectChart, subjectPieChart, reviewChart;
+    
+    // 当前筛选状态
+    let currentFilter = 'all';
+    
+    // 初始化
+    function init() {
+      // 设置默认日期为今天
+      const today = new Date().toISOString().split('T')[0];
+      taskDate.value = today;
+      
+      // 加载主题设置
+      loadTheme();
+      
+      // 加载任务数据
+      loadTasks();
+      
+      // 初始化图表
+      initCharts();
+      
+      // 渲染页面
+      renderTasks();
+      updateStats();
+      checkTodayReviews();
+      
+      // 绑定事件
+      bindEvents();
+    }
+    
+    // 初始化图表
+    function initCharts() {
+      // 学科进度条形图
+      const subjectCtx = document.getElementById('subject-chart').getContext('2d');
+      subjectChart = new Chart(subjectCtx, {
+        type: 'bar',
+        data: {
+          labels: ['数学', '语文', '英语', '物理', '化学', '生物'],
+          datasets: [{
+            label: '完成任务数',
+            data: [0, 0, 0, 0, 0, 0],
+            backgroundColor: [
+              '#0ea5e9', '#ef4444', '#8b5cf6', 
+              '#f59e0b', '#10b981', '#ec4899'
+            ],
+            borderRadius: 4,
+            barThickness: 12
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+      
+      // 学情分析中的饼图和折线图初始化（略）
+    }
+    
+    // 加载主题设置
+    function loadTheme() {
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    }
+    
+    // 切换主题
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light');
+    }
+    
+    // 加载任务数据
+    function loadTasks() {
+      const saved = localStorage.getItem(TASKS_STORAGE_KEY);
+      if (saved) {
+        tasks = JSON.parse(saved);
+      }
+    }
+    
+    // 保存任务数据
+    function saveTasks() {
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    }
+    
+    // 添加学习任务
+    function addStudyTask(text, subject, date, duration, isReview = false, parentId = null) {
+      const task = {
+        id: Date.now().toString(),
+        text,
+        subject,
+        date,
+        duration: parseFloat(duration),
+        completed: false,
+        createdAt: new Date().toISOString(),
+        isReview,
+        parentId, // 若为复习任务，关联原任务ID
+        reviewIndex: -1 // 复习阶段（0-3对应艾宾浩斯的4个时间点）
+      };
+      
+      tasks.unshift(task);
+      
+      // 若需要生成复习计划（新学习任务）
+      if (!isReview && enableReview.checked) {
+        generateReviewTasks(task);
+      }
+      
+      saveTasks();
+      return task;
+    }
+    
+    // 生成艾宾浩斯复习任务
+    function generateReviewTasks(originalTask) {
+      const originalDate = new Date(originalTask.date);
+      
+      EBBINGHAUS_INTERVALS.forEach((days, index) => {
+        // 计算复习日期（原任务日期 + 间隔天数）
+        const reviewDate = new Date(originalDate);
+        reviewDate.setDate(reviewDate.getDate() + days);
+        
+        // 创建复习任务
+        const reviewTask = {
+          id: `review-${Date.now()}-${index}`,
+          text: `复习：${originalTask.text}`,
+          subject: originalTask.subject,
+          date: reviewDate.toISOString().split('T')[0],
+          duration: Math.max(0.5, originalTask.duration / 2), // 复习时长为原任务一半
+          completed: false,
+          createdAt: new Date().toISOString(),
+          isReview: true,
+          parentId: originalTask.id,
+          reviewIndex: index // 标记是第几个复习阶段
+        };
+        
+        tasks.push(reviewTask);
+      });
+    }
+    
+    // 切换任务完成状态
+    function toggleTaskCompletion(id) {
+      const task = tasks.find(t => t.id === id);
+      if (task) {
+        task.completed = !task.completed;
+        saveTasks();
+        updateStats();
+        renderTasks();
+        checkTodayReviews();
+      }
+    }
+    
+    // 删除任务
+    function deleteTask(id) {
+      // 同时删除关联的复习任务
+      const task = tasks.find(t => t.id === id);
+      if (task && !task.isReview) {
+        tasks = tasks.filter(t => t.id !== id && t.parentId !== id);
+      } else {
+        tasks = tasks.filter(t => t.id !== id);
+      }
+      
+      saveTasks();
+      updateStats();
+      renderTasks();
+      checkTodayReviews();
+    }
+    
+    // 清除已完成任务
+    function clearCompletedTasks() {
+      tasks = tasks.filter(t => !t.completed);
+      saveTasks();
+      renderTasks();
+      updateStats();
+      checkTodayReviews();
+    }
+    
+    // 检查今日待复习任务
+    function checkTodayReviews() {
+      const today = new Date().toISOString().split('T')[0];
+      const todayReviews = tasks.filter(t => 
+        t.isReview && !t.completed && t.date === today
+      );
+      
+      reviewTodayCountEl.textContent = `${todayReviews.length}项`;
+      
+      if (todayReviews.length > 0) {
+        reviewReminderEl.classList.remove('hidden');
+        reviewListEl.innerHTML = '';
+        
+        todayReviews.forEach(task => {
+          const reviewItem = document.createElement('div');
+          reviewItem.className = 'flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg review-badge';
+          reviewItem.innerHTML = `
+            <div class="flex items-center">
+              <span class="w-2 h-2 rounded-full bg-subject-${task.subject} mr-2"></span>
+              <span class="text-sm">${task.text}</span>
+            </div>
+            <button class="complete-review text-primary text-sm" data-id="${task.id}">
+              已复习
+            </button>
+          `;
+          reviewListEl.appendChild(reviewItem);
+        });
+        
+        // 绑定复习完成事件
+        document.querySelectorAll('.complete-review').forEach(btn => {
+          btn.addEventListener('click', () => {
+            toggleTaskCompletion(btn.dataset.id);
+          });
+        });
+      } else {
+        reviewReminderEl.classList.add('hidden');
+      }
+    }
+    
+    // 创建任务元素
+    function createTaskElement(task) {
+      const taskEl = document.createElement('div');
+      taskEl.className = `flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg task-enter ${task.completed ? 'opacity-70' : ''} theme-transition`;
+      taskEl.dataset.taskId = task.id;
+      taskEl.dataset.filter = task.completed ? 'completed' : (task.isReview ? 'review' : 'pending');
+      
+      taskEl.innerHTML = `
+        <button class="toggle-complete mr-3 text-gray-400 hover:text-primary" data-id="${task.id}">
+          <i class="fa ${task.completed ? 'fa-check-circle text-primary' : 'fa-circle-o'}"></i>
+        </button>
+        
+        <div class="flex-grow min-w-0">
+          <div class="flex items-center">
+            <span class="w-2 h-2 rounded-full bg-subject-${task.subject} mr-2"></span>
+            <p class="text-sm ${task.completed ? 'line-through text-gray-500' : ''} break-words">
+              ${task.text}
+              ${task.isReview ? '<span class="ml-2 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">复习</span>' : ''}
+            </p>
+          </div>
+          <div class="flex items-center mt-1 text-xs text-gray-500">
+            <span>${formatDate(task.date)}</span>
+            <span class="mx-2">•</span>
+            <span>${task.duration}小时</span>
+          </div>
+        </div>
+        
+        <button class="delete-task ml-2 text-gray-400 hover:text-red-500" data-id="${task.id}">
+          <i class="fa fa-trash-o"></i>
+        </button>
+      `;
+      
+      return taskEl;
+    }
+    
+    // 渲染任务列表
+    function renderTasks() {
+      // 清空列表
+      while (taskList.firstChild) {
+        if (taskList.firstChild === emptyState) break;
+        taskList.removeChild(taskList.firstChild);
+      }
+      
+      // 检查是否有任务
+      if (tasks.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      
+      // 隐藏空状态
+      emptyState.classList.add('hidden');
+      
+      // 筛选任务
+      let filteredTasks = tasks;
+      if (currentFilter === 'pending') {
+        filteredTasks = tasks.filter(t => !t.completed && !t.isReview);
+      } else if (currentFilter === 'completed') {
+        filteredTasks = tasks.filter(t => t.completed);
+      } else if (currentFilter === 'review') {
+        filteredTasks = tasks.filter(t => t.isReview);
+      }
+      
+      // 按日期排序（近的在前）
+      filteredTasks.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      // 添加任务元素
+      filteredTasks.forEach(task => {
+        const taskEl = createTaskElement(task);
+        taskList.appendChild(taskEl);
+      });
+      
+      // 绑定任务事件
+      bindTaskEvents();
+    }
+    
+    // 更新统计数据
+    function updateStats() {
+      // 学习任务总数
+      const totalStudyTasks = tasks.filter(t => !t.isReview).length;
+      // 已完成学习任务
+      const completedStudyTasks = tasks.filter(t => !t.isReview && t.completed).length;
+      // 完成率
+      const completionRate = totalStudyTasks > 0 
+        ? Math.round((completedStudyTasks / totalStudyTasks) * 100) 
+        : 0;
+      // 复习次数
+      const reviewCount = tasks.filter(t => t.isReview && t.completed).length;
+      // 总专注时长
+      const focusHours = tasks
+        .filter(t => t.completed)
+        .reduce((sum, task) => sum + task.duration, 0)
+        .toFixed(1);
+      
+      // 更新UI
+      totalStudyTasksEl.textContent = totalStudyTasks;
+      studyCompletionEl.textContent = `${completionRate}%`;
+      reviewCountEl.textContent = reviewCount;
+      focusHoursEl.textContent = `${focusHours}h`;
+      
+      // 更新学科图表数据
+      updateSubjectChart();
+    }
+    
+    // 更新学科图表
+    function updateSubjectChart() {
+      const subjects = ['math', 'chinese', 'english', 'physics', 'chemistry', 'biology'];
+      const completedCounts = subjects.map(subject => 
+        tasks.filter(t => t.subject === subject && t.completed).length
+      );
+      
+      subjectChart.data.datasets[0].data = completedCounts;
+      subjectChart.update();
+    }
+    
+    // 绑定事件
+    function bindEvents() {
+      // 表单提交
+      taskForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = taskInput.value.trim();
+        const subject = taskSubject.value;
+        const date = taskDate.value;
+        const duration = taskDuration.value;
+        const isReview = document.querySelector('input[name="task-type"]:checked').value === 'review';
+        
+        if (text) {
+          addStudyTask(text, subject, date, duration, isReview);
+          taskInput.value = '';
+          renderTasks();
+          updateStats();
+          checkTodayReviews();
+        }
+      });
+      
+      // 模板按钮
+      templateBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          taskInput.value = btn.dataset.text;
+          taskSubject.value = btn.dataset.subject;
+          taskInput.focus();
+        });
+      });
+      
+      // 筛选按钮
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          currentFilter = btn.dataset.filter;
+          
+          // 更新按钮样式
+          filterBtns.forEach(b => {
+            if (b.dataset.filter === currentFilter) {
+              b.classList.add('bg-primary', 'text-white');
+              b.classList.remove('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            } else {
+              b.classList.remove('bg-primary', 'text-white');
+              b.classList.add('bg-gray-200', 'dark:bg-gray-700', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+            }
+          });
+          
+          renderTasks();
+        });
+      });
+      
+      // 清除已完成
+      clearCompletedBtn.addEventListener('click', clearCompletedTasks);
+      
+      // 主题切换
+      themeToggle.addEventListener('click', toggleTheme);
+      
+      // 学情统计模态框
+      statsBtn.addEventListener('click', () => {
+        statsModal.classList.remove('hidden');
+        statsModal.classList.add('flex');
+        updateStatsReport(); // 更新报告数据
+      });
+      
+      closeStats.addEventListener('click', () => {
+        statsModal.classList.remove('flex');
+        statsModal.classList.add('hidden');
+      });
+      
+      // 点击模态框外部关闭
+      statsModal.addEventListener('click', (e) => {
+        if (e.target === statsModal) {
+          statsModal.classList.remove('flex');
+          statsModal.classList.add('hidden');
+        }
+      });
+    }
+    
+    // 绑定任务元素事件
+    function bindTaskEvents() {
+      // 切换完成状态
+      document.querySelectorAll('.toggle-complete').forEach(btn => {
+        btn.addEventListener('click', () => {
+          toggleTaskCompletion(btn.dataset.id);
+        });
+      });
+      
+      // 删除任务
+      document.querySelectorAll('.delete-task').forEach(btn => {
+        btn.addEventListener('click', () => {
+          deleteTask(btn.dataset.id);
+        });
+      });
+    }
+    
+    // 更新学情报告
+    function updateStatsReport() {
+      // 计算本周学习数据（简化版）
+      const today = new Date();
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay());
+      
+      const weeklyTasks = tasks.filter(t => 
+        new Date(t.completedAt || t.createdAt) >= weekStart
+      );
+      
+      const weeklyHours = weeklyTasks
+        .filter(t => t.completed)
+        .reduce((sum, t) => sum + t.duration, 0)
+        .toFixed(1);
+      
+      const dailyAverage = weeklyTasks.length > 0 
+        ? (weeklyTasks.length / 7).toFixed(1) 
+        : 0;
+      
+      document.getElementById('weekly-study-hours').textContent = `${weeklyHours}小时`;
+      document.getElementById('daily-average').textContent = `${dailyAverage}项`;
+      
+      // 生成学习建议（示例逻辑）
+      const mathTasks = tasks.filter(t => t.subject === 'math' && !t.completed).length;
+      const englishReviews = tasks.filter(t => t.subject === 'english' && t.isReview && !t.completed).length;
+      
+      let suggestion = '';
+      if (englishReviews > 2) {
+        suggestion = '英语复习任务积压较多，建议优先完成，巩固记忆效果更佳哦！';
+      } else if (mathTasks > 3) {
+        suggestion = '数学未完成任务较多，可拆分每天完成1-2项，避免堆积压力。';
+      } else {
+        suggestion = '学习状态良好！继续保持当前节奏，注意均衡各科学习时间。';
+      }
+      document.getElementById('study-suggestion').textContent = suggestion;
+    }
+    
+    // 日期格式化工具
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      
+      if (dateStr === today) return '今天';
+      if (dateStr === tomorrowStr) return '明天';
+      
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
